@@ -1,0 +1,327 @@
+---
+title: "proj8"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(caret)
+library(signal)
+library(ggplot2)
+library(R.matlab)
+library(randomForest)
+library(fastICA)
+library(coroICA)
+library(plyr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## preproc
+Loading the data: Only looking at T-files for now (excluding E-files)
+Only need first 22 channels and last 6 runs
+already CAR and filtered (acording to subject)
+```{r}
+load('Tfiles.Rdata')
+load('Xfiles.Rdata')
+load('Labelfiles.Rdata')
+```
+Xtrains=rbind(M1,M2,M3,M4,M5,M6,M7,M8)
+Xtests=
+
+```{r}
+XAll=list(M1,M2,M3)
+XAll$M1
+```
+
+
+make it a bit easier
+
+```{r}
+head(M1)
+  
+```
+
+```{r}
+test=function(N){
+  Ms=list(M1,M2)
+  print()
+}
+```
+
+
+```{r}
+fastICAtester=function(M,)
+Xtrains=rbind(M1,M2,M3,M4,M5,M6,M7,M8)
+Xtests=M9
+Ytrains=rbind(T1Ys,T2Ys,T3Ys,T4Ys,T5Ys,T6Ys,T7Ys,T8Ys)
+Ytests=T9Ys
+for (i in 1:22){ #i in 1:22
+  Xtrains[,i]=(Xtrains[,i]-mean(Xtrains[,i]))/sd(Xtrains[,i])  
+  Xtests[,i]=(Xtests[,i]-mean(Xtests[,i]))/sd(Xtests[,i])  
+}
+
+Str=fastICA(Xtrains,n.comp=5)$S #train
+Ste=fastICA(Xtests,n.comp=5)$S #test
+```
+ready to take the bandpower
+Lets just work with the M-matrices for now.
+
+dim(Ytrains)
+for(i in 1:(48*5)){
+  Tr1[i,]=log(diag(var(S1[1:750+(i-1)*750,]))) #band power
+}
+
+
+
+
+
+```{r}
+dim(Ytrains) #48*6*8
+dim(Ytests) #48*6
+Mtrains=matrix(NA,nrow=dim(Ytrains)[1],ncol=5)
+Mtests=matrix(NA,nrow=dim(Ytests)[1],ncol=5)
+
+for(i in 1:dim(Ytrains)[1]){
+  Mtrains[i,]=log(diag(var(Str[1:750+(i-1)*750,]))) #band power
+}
+for(i in 1:dim(Ytests)[1]){
+  Mtests[i,]=log(diag(var(Ste[1:750+(i-1)*750,]))) #band power
+}
+
+```
+
+288/6/48
+
+```{r}
+Trainset=cbind(Ytrains[,2],Mtrains)
+Testset=cbind(Ytests[,2],Mtests)
+```
+
+?randomForest
+```{r}
+rf1=randomForest(y=as.factor(Trainset[,1]),x=Trainset[,-1],importance=T,)
+print(rf1)
+
+mean(predict(rf1,newdata=Testset[,-1])==Testset[,1]) #28% test accuracy cross/subject. not good
+```
+giving us test-accuracy of 28%
+
+### fastICA done properly?
+
+
+
+```{r}
+#Xtrains=rbind(M1,M2,M3,M4,M5,M6,M7,M8)
+#Xtests=M9
+#Ytrains=rbind(T1Ys,T2Ys,T3Ys,T4Ys,T5Ys,T6Ys,T7Ys,T8Ys)
+#Ytests=T9Ys
+#for (i in 1:dim(M1)[2]){ #i in 1:22
+#  Xtrains[,i]=(Xtrains[,i]-mean(Xtrains[,i]))/sd(Xtrains[,i])  
+#  Xtests[,i]=(Xtests[,i]-mean(Xtests[,i]))/sd(Xtests[,i])  
+#}
+
+Mp=preProcess(Xtrains,method='pca')
+Mpa=predict(Mp,Xtrains)
+dim(Mpa)
+
+
+#7 from..
+Str=fastICA(Xtrains,n.comp=dim(Mpa)[2]) #train #dim=7
+
+dim(Mpa)
+#Ste=fastICA(Xtests,n.comp=5)$S #test
+Mp2=preProcess(Xtests,method='pca',pcaComp=dim(Mpa)[2])
+Mpa2=predict(Mp2,Xtests)
+dim(Mpa2)
+```
+
+ready to take the bandpower
+Lets just work with the M-matrices for now.
+?preProcess
+View(Str)
+
+dim(Ytrains)
+for(i in 1:(48*5)){
+  Tr1[i,]=log(diag(var(S1[1:750+(i-1)*750,]))) #band power
+}
+
+dim(Pte)
+dim(Mpa2)
+dim(Str$W)
+
+```{r}
+dim(Ytrains) #48*6*8
+dim(Ytests) #48*6
+Mtrains=matrix(NA,nrow=dim(Ytrains)[1],ncol=dim(Mpa)[2])
+Mtests=matrix(NA,nrow=dim(Ytests)[1],ncol=dim(Mpa)[2])
+#dim(Str$S)
+Ste=Mpa2%*%Str$W
+#Ste=t(Str$W%*%t(Mpa2))
+
+for(i in 1:dim(Ytrains)[1]){
+  Mtrains[i,]=log(diag(var(Str$S[1:750+(i-1)*750,]))) #band power
+}
+for(i in 1:dim(Ytests)[1]){
+  Mtests[i,]=log(diag(var(Ste[1:750+(i-1)*750,]))) #band power
+}
+
+```
+
+dim(Mtrains)
+dim(Mtests)
+?fastICA
+```{r}
+Trainset=cbind(Ytrains[,2],Mtrains)
+Testset=cbind(Ytests[,2],Mtests)
+```
+
+?randomForest
+```{r}
+rf1=randomForest(y=as.factor(Trainset[,1]),x=Trainset[,-1],importance=T,)
+print(rf1)
+
+mean(predict(rf1,newdata=Testset[,-1])==Testset[,1]) #28% test accuracy cross/subject. not good
+#increased to 39%
+
+mean(predict(rf1,newdata=temp2[,-1])==temp2[,1]) #test accuracy 20% bad!
+
+```
+
+
+
+## COROICA
+
+probably wanna PCA before doing coroICA....
+
+heres coroICA:
+#dim(Xtrains)
+?preProcess
+
+View(Cte)
+
+```{r}
+colnames(Xtrains)=1:22
+colnames(Xtests)=1:22
+dim(Xtrains)
+
+pcaTrain=preProcess(Xtrains,method='pca',thresh = 0.95)      #pcaTrain$dim
+pcaTraincomp=(predict(pcaTrain,Xtrains)) 
+
+pcaTests=preProcess(Xtests,method='pca',pcaComp = dim(pcaTraincomp)[2])
+pcaTestscomp=(predict(pcaTests,Xtests)) 
+
+#dim(pcaTestscomp)[1]/750/48
+Ctr=coroICA(pcaTraincomp,partitionsize=48*750,groupsize=750*48*6,n_components=dim(pcaTraincomp)[2],max_iter = 10000,pairing = 'neighbouring') #train #compiles forever. does compile eventually.
+Cte=coroICA(pcaTestscomp,partitionsize=48*750,groupsize=48*6*750,n_components=dim(pcaTraincomp)[2],max_iter=10000,pairing='neighbouring') #test
+
+#CtrN2=coroICA(pcaTraincomp,partitionsize=48,groupsize=48*6,n_components=dim(pcaTraincomp)[2],pairing='neighbouring',max_iter=10000,condition_threshold = 1000,minimize_loss = minimize_loss) #train #compiles forever. does compile eventually.
+
+#CteN=coroICA(pcaTestscomp,partitionsize=48,groupsize=48*6,n_components=dim(pcaTraincomp)[2],pairing='neighbouring') #test
+
+#CteN2=coroICA(pcaTestscomp,partitionsize=48,groupsize=48*6,n_components=dim(pcaTraincomp)[2],pairing='neighbouring',max_iter=10000,condition_threshold = 1000,minimize_loss = FALSE) #train #compiles forever. does compile eventually.
+
+#maybe play with pairings?. They used neighbouring in the python code
+CtrS=Ctr$Shat
+CteS=Cte$Shat
+
+```
+Still not converging. Maybe try with maxit=10k(as in python) instead of 1k (normal)
+
+View(Cte)
+View(Ctr)
+View(CteN)
+View(CtrN) #converged=false
+View(Ctr)
+View*Ctr
+
+#Ctr=coroICA(Xtrains,partitionsize=48,groupsize=48*6,n_components=22)$Shat #train
+#Cte=coroICA(Xtests,partitionsize=48,groupsize=48*6,n.comp=5)$S #test
+
+
+
+
+
+
+```{r}
+dim(Ytrains) #48*6*8
+dim(Ytests) #48*6
+MStrains=matrix(NA,nrow=dim(Ytrains)[1],ncol=dim(CtrS)[2])
+MStests=matrix(NA,nrow=dim(Ytests)[1],ncol=dim(CtrS)[2])
+
+test1=pcaTestscomp%*%Ctr$V 
+dim(Ctr$V)
+
+
+
+for(i in 1:dim(Ytrains)[1]){
+  MStrains[i,]=log(diag(var(CtrS[1:750+(i-1)*750,]))) #band power
+}
+
+#for(i in 1:dim(Ytests)[1]){
+#  MStests[i,]=log(diag(var(CteS[1:750+(i-1)*750,]))) #band power
+#}
+
+test2=t(Ctr$V%*%t(pcaTestscomp))  #looks silly! but works. should be doing this i imagine!!
+
+for(i in 1:dim(Ytests)[1]){
+  MStests[i,]=log(diag(var(test2[1:750+(i-1)*750,]))) #band power
+}
+
+
+temp1=cbind(Ytrains[,2],MStrains)
+temp2=cbind(Ytests[,2],MStests)
+
+#?memory.limit
+
+#memory.limit(1000000) #dirty "fix"
+rfc1=randomForest(y=as.factor(temp1[,1]),x=temp1[,-1]) #OOB error rate 62%
+
+print(rfc1) #60% oob 58%
+
+mean(predict(rfc1,newdata=temp2[,-1])==temp2[,1]) #test accuracy 20% bad!
+#25% with ctrN
+#26% with convergence....................... MOTHER FUCKER
+#27%. GRR
+#28 with test%*% V
+#35%!!! with 
+#?gc()
+```
+Simply using Shat from coroICA does not yield much.  worse test-accuracy than with fastICA.
+
+
+Ctens
+
+?coroICA
+
+
+
+
+```{r}
+for(l in 1:9){  
+    tmp1=matrix(NA,nrow=750*48,ncol=22)
+    tmp2=matrix(NA,nrow=750*48,ncol=22)
+    tmp3=matrix(NA,nrow=750*48,ncol=22)
+    tmp4=matrix(NA,nrow=750*48,ncol=22)
+    tmp5=matrix(NA,nrow=750*48,ncol=22)
+    tmp6=matrix(NA,nrow=750*48,ncol=22)
+    for (i in 1:48){
+      for (j in 1:22){
+         tmp1[((1:750)+750*(i-1)),j]=eval(as.name(paste0('T',l,'R1')))[(eval(as.name(paste0('T',l,'RY1')))[i,1]+751):(eval(as.name(paste0('xT',l,'RY1')))[i,1]+1500),j]
+         tmp2[((1:750)+750*(i-1)),j]=eval(as.name(paste0('T',l,'R2')))[(eval(as.name(paste0('T',l,'RY2')))[i,1]+751):(eval(as.name(paste0('xT',l,'RY2')))[i,1]+1500),j]
+         tmp3[((1:750)+750*(i-1)),j]=eval(as.name(paste0('T',l,'R3')))[(eval(as.name(paste0('T',l,'RY3')))[i,1]+751):(eval(as.name(paste0('xT',l,'RY3')))[i,1]+1500),j]
+         tmp4[((1:750)+750*(i-1)),j]=eval(as.name(paste0('T',l,'R4')))[(eval(as.name(paste0('T',l,'RY4')))[i,1]+751):(eval(as.name(paste0('xT',l,'RY4')))[i,1]+1500),j]
+         tmp5[((1:750)+750*(i-1)),j]=eval(as.name(paste0('T',l,'R5')))[(eval(as.name(paste0('T',l,'RY5')))[i,1]+751):(eval(as.name(paste0('xT',l,'RY5')))[i,1]+1500),j]
+         tmp6[((1:750)+750*(i-1)),j]=eval(as.name(paste0('T',l,'R6')))[(eval(as.name(paste0('T',l,'RY6')))[i,1]+751):(eval(as.name(paste0('xT',l,'RY6')))[i,1]+1500),j]
+      }
+    }
+   # assign(paste0("L", l),list(tmp1,tmp2,tmp3,tmp4,tmp5,tmp6))
+  #  assign(paste0("L2", l),list(    rbind(tmp1,tmp2,tmp3,tmp4,tmp5,tmp6)))
+    assign(paste0("M", l),rbind(tmp1,tmp2,tmp3,tmp4,tmp5,tmp6))
+# could also     assign(paste0("L", l),list(tmp1,tmp2,tmp3,tmp4,tmp5,tmp6))
+#    assign(paste0("L", l),list(xM1,xM2,xM3,xM4,xM5,xM6))
+#   rbind(tmp1,tmp2,tmp3,tmp4,tmp5,tmp6)
+}
+
+```
+
+```
+
