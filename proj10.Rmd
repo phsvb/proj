@@ -1,0 +1,180 @@
+---
+title: "proj10iguess"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(caret)
+library(signal)
+library(ggplot2)
+library(R.matlab)
+library(randomForest)
+library(fastICA)
+library(coroICA)
+library(plyr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading the data
+
+Has been preprocessed : filtered for each subject. Car'd.
+
+```{r}
+load('TMs.Rdata')
+load('TYs.Rdata')
+```
+
+## Sets, scaling+centering
+
+Train/testsets. Change this one as we please:
+
+```{r}
+Xtrains=rbind(M1,M2,M3,M4,M5,M6,M7,M8)
+Xtests=M9
+Ytrains=rbind(T1Ys,T2Ys,T3Ys,T4Ys,T5Ys,T6Ys,T7Ys,T8Ys)
+Ytests=T9Ys
+
+Xtrains=rbind(M1,M2,M3,M4,M5,M6,M7,M9)
+Xtests=M8
+Ytrains=rbind(T1Ys,T2Ys,T3Ys,T4Ys,T5Ys,T6Ys,T7Ys,T9Ys)
+Ytests=T8Ys
+```
+
+Center+scale:
+```{r}
+for (i in 1:dim(M1)[2]){ #i in 1:22. Center and scale all features.
+  Xtrains[,i]=(Xtrains[,i]-mean(Xtrains[,i]))/sd(Xtrains[,i])  
+  Xtests[,i]=(Xtests[,i]-mean(Xtests[,i]))/sd(Xtests[,i])  
+}
+
+```
+
+
+## PCA.
+
+Note that fastICA already does PCA so we mostly do this for coroICA (and for dimension).
+
+```{r}
+colnames(Xtrains)=1:22
+colnames(Xtests)=1:22
+MP=preProcess(Xtrains,method='pca',thresh=0.95)
+MPa=predict(MP,Xtrains) #PCAcomp for training set
+Ndims=dim(MPa)[2]
+MP2=preProcess(Xtests,method='pca',pcaComp=Ndims)
+MP2a=predict(MP2,Xtests) #PCAcomp for test set
+```
+
+## fastICA
+
+
+```{r}
+Str=fastICA(Xtrains,n.comp=Ndims) #train
+StrS=Str$S #S_train signals
+SteS=MP2a%*%Str$W #S_test from W_train
+SteS2=t(Str$W%*%t(MP2a))
+```
+alternatively try #SteS=t(Str$W%*%t(Mpa2))
+$$
+SteS=P_{CA}\times W\\
+SteS_2=(W\times P_{CA}^T)^T=P_{CA}\times W^T
+$$
+Hence these are infact not the same! $$W\neq W^T$$
+
+
+
+Taking the bandpower:
+```{r}
+Mtrains=matrix(NA,nrow=dim(Ytrains)[1],ncol=Ndims)
+Mtests=matrix(NA,nrow=dim(Ytests)[1],ncol=Ndims)
+Mtests2=matrix(NA,nrow=dim(Ytests)[1],ncol=Ndims)
+for(i in 1:dim(Ytrains)[1]){
+  Mtrains[i,]=log(diag(var(StrS[1:750+(i-1)*750,]))) #band power
+}
+for(i in 1:dim(Ytests)[1]){
+  Mtests[i,]=log(diag(var(SteS[1:750+(i-1)*750,]))) #band power
+}
+for(i in 1:dim(Ytests)[1]){
+  Mtests2[i,]=log(diag(var(SteS2[1:750+(i-1)*750,]))) #band power
+}
+
+```
+
+Instead of diag(var) we may compute just the variance i guess? Should be slightly faster
+
+```{r}
+Trainset=cbind(Ytrains[,2],Mtrains)
+Testset=cbind(Ytests[,2],Mtests)
+Testset2=cbind(Ytests[,2],Mtests2)
+rf1=randomForest(y=as.factor(Trainset[,1]),x=Trainset[,-1])
+print(rf1)
+
+ficate1=mean(predict(rf1,newdata=Testset[,-1])==Testset[,1]) #26 big meh
+ficate2=mean(predict(rf1,newdata=Testset2[,-1])==Testset2[,1]) #26 big meh
+c(ficate1,ficate2)
+```
+
+both do decent i suppose. 32,36
+
+Should only really be doing one though (the correct one)..
+
+
+## coroICA
+
+Using the PCA from before
+
+dim(MPa)
+
+```{r}
+Ctr=coroICA(MPa,partitionsize=48*750,groupsize=750*48*6,n_components=Ndims,max_iter = 10000,pairing = 'neighbouring') 
+#train #compiles forever. does compile eventually. 
+#Cte=coroICA(pcaTestscomp,partitionsize=48*750,groupsize=48*6*750,n_components=Ndim,max_iter=10000,pairing='neighbouring') #test
+cat('converged=',Ctr$converged)
+```
+So Ctr is our coroICA item.  (should have converged) (did not converge now...) (previously converged after 6k).
+
+
+Perhabs does not converge everytime. Maybe what they (in python?) keep track of with failedICA
+
+View(Ctr)
+
+```{r}
+CtrS=Ctr$Shat
+MStrains=matrix(NA,nrow=dim(Ytrains)[1],ncol=Ndims)
+MStests=matrix(NA,nrow=dim(Ytests)[1],ncol=Ndims)
+MStests2=matrix(NA,nrow=dim(Ytests)[1],ncol=Ndims)
+
+for(i in 1:dim(Ytrains)[1]){
+  MStrains[i,]=log(diag(var(CtrS[1:750+(i-1)*750,]))) #band power
+}
+
+test2=t(Ctr$V%*%t(MP2a))  #looks silly! but works. should be doing this i imagine!!
+#or.. MP2A%*%V? as below
+test3=MP2a%*%Ctr$V 
+
+for(i in 1:dim(Ytests)[1]){
+  MStests[i,]=log(diag(var(test2[1:750+(i-1)*750,]))) #band power
+}
+
+for(i in 1:dim(Ytests)[1]){
+  MStests2[i,]=log(diag(var(test3[1:750+(i-1)*750,]))) #band power
+}
+
+temp1=cbind(Ytrains[,2],MStrains)
+temp2=cbind(Ytests[,2],MStests)
+temp3=cbind(Ytests[,2],MStests2)
+
+rfc1=randomForest(y=as.factor(temp1[,1]),x=temp1[,-1]) #OOB error rate 62%
+print(rfc1) 
+
+cicate=mean(predict(rfc1,newdata=temp2[,-1])==temp2[,1]) #test accuracy 32. despite non-convergence. issa okay?
+cicate2=mean(predict(rfc1,newdata=temp3[,-1])==temp3[,1]) #test accuracy 32. despite non-convergence. issa 
+```
+
+
+
+```{r}
+cat('fastICA test accuracy=',ficate1, 'or',ficate2)
+cat('coroICA test accuracy=',cicate,'or',cicate2) #prolly first..
+cat('converged',Ctr$converged)
+```
+

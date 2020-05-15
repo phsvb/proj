@@ -1,0 +1,223 @@
+---
+title: "save/load data"
+output: html_document
+---
+
+rm()
+
+```{r setup, include=FALSE}
+library(caret)
+library(signal)
+library(ggplot2)
+library(R.matlab)
+library(randomForest)
+library(fastICA)
+library(coroICA)
+library(plyr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## preproc
+Here is how we load/save the data:
+Loading the data: Only looking at T-files for now (excluding E-files)
+Only need first 22 channels and last 6 runs
+
+```{r}
+T1 <- readMat('data/A01T.mat')
+T1=(unlist(T1,recursive="F"))
+T2 <- readMat('data/A02T.mat')
+T2=(unlist(T2,recursive="F"))
+T3 <- readMat('data/A03T.mat')
+T3=(unlist(T3,recursive="F"))
+T4 <- readMat('data/A04T.mat')
+T4=(unlist(T4,recursive="F"))
+T5 <- readMat('data/A05T.mat')
+T5=(unlist(T5,recursive="F"))
+T6 <- readMat('data/A06T.mat')
+T6=(unlist(T6,recursive="F"))
+T7 <- readMat('data/A07T.mat')
+T7=(unlist(T7,recursive="F"))
+T8 <- readMat('data/A08T.mat')
+T8=(unlist(T8,recursive="F"))
+T9 <- readMat('data/A09T.mat')
+T9=(unlist(T9,recursive="F"))
+```
+or alternative 
+save(T1,T2,T3,T4,T5,T6,T7,T8,T9,file='Tfiles.Rdata')
+load('Tfiles.Rdata')
+
+
+we define 
+xTiRj to be the i'th person with run 'j
+likeiwse 
+xTiRjY to be the i'th person with run 'j - starting times,labels and "artifacting"
+
+Will want to apply method b) here and use coroICA probably!
+
+```{r,echo=T,include=T}
+for (j in 4:9){
+  assign(paste0("xT1R", j-3),(unlist(T1[[j]],recursive = F)[[1]][,1:22]))
+  assign(paste0("xT2R", j-3),(unlist(T2[[j]],recursive = F)[[1]][,1:22]))
+  assign(paste0("xT3R", j-3),(unlist(T3[[j]],recursive = F)[[1]][,1:22]))
+  assign(paste0("xT5R", j-3),(unlist(T5[[j]],recursive = F)[[1]][,1:22]))
+  assign(paste0("xT6R", j-3),(unlist(T6[[j]],recursive = F)[[1]][,1:22]))
+  assign(paste0("xT7R", j-3),(unlist(T7[[j]],recursive = F)[[1]][,1:22]))
+  assign(paste0("xT8R", j-3),(unlist(T8[[j]],recursive = F)[[1]][,1:22]))
+  assign(paste0("xT9R", j-3),(unlist(T9[[j]],recursive = F)[[1]][,1:22]))
+}
+for (j in 2:7){
+  assign(paste0("xT4R", j-1),(unlist(T4[[j]],recursive = F)[[1]][,1:22]))
+}
+
+##########
+
+#View(T1[[4]]) #DATA4 #so we can get $data4 with [[4]]
+for (j in 4:9){
+  assign(paste0("xT1RY", j-3),(cbind(T1[[j]][[1]][[2]],T1[[j]][[1]][[3]],T1[[j]][[1]][[6]])))
+  assign(paste0("xT2RY", j-3),(cbind(T2[[j]][[1]][[2]],T2[[j]][[1]][[3]],T2[[j]][[1]][[6]])))
+  assign(paste0("xT3RY", j-3),(cbind(T3[[j]][[1]][[2]],T3[[j]][[1]][[3]],T3[[j]][[1]][[6]])))
+  assign(paste0("xT5RY", j-3),(cbind(T5[[j]][[1]][[2]],T5[[j]][[1]][[3]],T5[[j]][[1]][[6]])))
+  assign(paste0("xT6RY", j-3),(cbind(T6[[j]][[1]][[2]],T6[[j]][[1]][[3]],T6[[j]][[1]][[6]])))
+  assign(paste0("xT7RY", j-3),(cbind(T7[[j]][[1]][[2]],T7[[j]][[1]][[3]],T7[[j]][[1]][[6]])))
+  assign(paste0("xT8RY", j-3),(cbind(T8[[j]][[1]][[2]],T8[[j]][[1]][[3]],T8[[j]][[1]][[6]])))
+  assign(paste0("xT9RY", j-3),(cbind(T9[[j]][[1]][[2]],T9[[j]][[1]][[3]],T9[[j]][[1]][[6]])))
+}
+for (j in 2:7){
+  assign(paste0("xT4RY", j-1),(cbind(T4[[j]][[1]][[2]],T4[[j]][[1]][[3]],T4[[j]][[1]][[6]])))
+}
+
+```
+
+# Filtering
+5 seconds of a 25 Hz signal with slow drift, sampling frequency 250 Hz
+
+
+```{r}
+coefs <- butter(3, c(8 / (.5 * 250), 30 / (.5 * 250)), "pass")
+
+```
+
+Now each L_i is a list for a subject (i=1..9). Containing all 6 runs - each as a matrix
+
+
+<!-- for (i in 1:2){ -->
+<!--   print(dim(eval(as.name(paste0('xT1R',i))))) -->
+<!-- } 
+THIS also works
+-->
+750*48 rows instead
+
+
+
+```{r}
+#could do 6x9 here - so that for each subject. ..
+for(i in 1:9){
+#    assign(paste0("L", i),list(NA,NA,NA,NA,NA,NA))
+    assign(paste0("M", i),matrix(NA,nrow=48*750*6,ncol=22))
+}
+
+for(l in 1:9){  
+    tmp1=matrix(NA,nrow=750*48,ncol=22)
+    tmp2=matrix(NA,nrow=750*48,ncol=22)
+    tmp3=matrix(NA,nrow=750*48,ncol=22)
+    tmp4=matrix(NA,nrow=750*48,ncol=22)
+    tmp5=matrix(NA,nrow=750*48,ncol=22)
+    tmp6=matrix(NA,nrow=750*48,ncol=22)
+    for (i in 1:48){
+      for (j in 1:22){
+         tmp1[((1:750)+750*(i-1)),j]=eval(as.name(paste0('xT',l,'R1')))[(eval(as.name(paste0('xT',l,'RY1')))[i,1]+751):(eval(as.name(paste0('xT',l,'RY1')))[i,1]+1500),j]
+         tmp2[((1:750)+750*(i-1)),j]=eval(as.name(paste0('xT',l,'R2')))[(eval(as.name(paste0('xT',l,'RY2')))[i,1]+751):(eval(as.name(paste0('xT',l,'RY2')))[i,1]+1500),j]
+         tmp3[((1:750)+750*(i-1)),j]=eval(as.name(paste0('xT',l,'R3')))[(eval(as.name(paste0('xT',l,'RY3')))[i,1]+751):(eval(as.name(paste0('xT',l,'RY3')))[i,1]+1500),j]
+         tmp4[((1:750)+750*(i-1)),j]=eval(as.name(paste0('xT',l,'R4')))[(eval(as.name(paste0('xT',l,'RY4')))[i,1]+751):(eval(as.name(paste0('xT',l,'RY4')))[i,1]+1500),j]
+         tmp5[((1:750)+750*(i-1)),j]=eval(as.name(paste0('xT',l,'R5')))[(eval(as.name(paste0('xT',l,'RY5')))[i,1]+751):(eval(as.name(paste0('xT',l,'RY5')))[i,1]+1500),j]
+         tmp6[((1:750)+750*(i-1)),j]=eval(as.name(paste0('xT',l,'R6')))[(eval(as.name(paste0('xT',l,'RY6')))[i,1]+751):(eval(as.name(paste0('xT',l,'RY6')))[i,1]+1500),j]
+      }
+    }
+   # assign(paste0("L", l),list(tmp1,tmp2,tmp3,tmp4,tmp5,tmp6))
+  #  assign(paste0("L2", l),list(    rbind(tmp1,tmp2,tmp3,tmp4,tmp5,tmp6)))
+    assign(paste0("M", l),rbind(tmp1,tmp2,tmp3,tmp4,tmp5,tmp6))
+# could also     assign(paste0("L", l),list(tmp1,tmp2,tmp3,tmp4,tmp5,tmp6))
+#    assign(paste0("L", l),list(xM1,xM2,xM3,xM4,xM5,xM6))
+#   rbind(tmp1,tmp2,tmp3,tmp4,tmp5,tmp6)
+}
+
+```
+
+dim(L21[[1]])
+dim(L1[[1]])
+dim(L2[[1]])
+dim(L3[[1]])
+dim(L9[[1]])
+rm(L28)
+rm(L29)
+rm(T1,T2,T3,T4,T5,T6,T7,T8,T9)
+rm(L22)
+
+c(dim(M1),dim(M2),dim(M3),dim(M4),dim(M5),dim(M6),dim(M7),dim(M8),dim(M9))
+
+```{r}
+T1Ys=matrix(NA,nrow=48*6,ncol=3)
+T2Ys=matrix(NA,nrow=48*6,ncol=3)
+T3Ys=matrix(NA,nrow=48*6,ncol=3)
+T4Ys=matrix(NA,nrow=48*6,ncol=3)
+T5Ys=matrix(NA,nrow=48*6,ncol=3)
+T6Ys=matrix(NA,nrow=48*6,ncol=3)
+T7Ys=matrix(NA,nrow=48*6,ncol=3)
+T8Ys=matrix(NA,nrow=48*6,ncol=3)
+T9Ys=matrix(NA,nrow=48*6,ncol=3)
+
+
+
+
+for (i in 1:6){
+  T1Ys[1:48+48*(i-1),]=eval(as.name(paste0('xT1RY',i)))
+  T2Ys[1:48+48*(i-1),]=eval(as.name(paste0('xT2RY',i)))
+  T3Ys[1:48+48*(i-1),]=eval(as.name(paste0('xT3RY',i)))
+  T4Ys[1:48+48*(i-1),]=eval(as.name(paste0('xT4RY',i)))
+  T5Ys[1:48+48*(i-1),]=eval(as.name(paste0('xT5RY',i)))
+  T6Ys[1:48+48*(i-1),]=eval(as.name(paste0('xT6RY',i)))
+  T7Ys[1:48+48*(i-1),]=eval(as.name(paste0('xT7RY',i)))
+  T8Ys[1:48+48*(i-1),]=eval(as.name(paste0('xT8RY',i)))
+  T9Ys[1:48+48*(i-1),]=eval(as.name(paste0('xT9RY',i)))
+}
+```
+
+
+decision:
+we filter by subject. (could also have filtered by training/test)
+```{r}
+coefs <- butter(3, c(8 / (.5 * 250), 30 / (.5 * 250)), "pass")
+for(j in 1:22){ #filtering
+    M1[,j]=filter(coefs$b, coefs$a, M1[,j])
+    M2[,j]=filter(coefs$b, coefs$a, M2[,j])
+    M3[,j]=filter(coefs$b, coefs$a, M3[,j])
+    M4[,j]=filter(coefs$b, coefs$a, M4[,j])
+    M5[,j]=filter(coefs$b, coefs$a, M5[,j])
+    M6[,j]=filter(coefs$b, coefs$a, M6[,j])
+    M7[,j]=filter(coefs$b, coefs$a, M7[,j])
+    M8[,j]=filter(coefs$b, coefs$a, M8[,j])
+    M9[,j]=filter(coefs$b, coefs$a, M9[,j])
+}
+
+for(k in 1:dim(M1)[1]){ #car - all have same dimension
+  M1[k,]=M1[k,]-mean(M1[k,])
+  M2[k,]=M2[k,]-mean(M2[k,])
+  M3[k,]=M3[k,]-mean(M3[k,])
+  M4[k,]=M4[k,]-mean(M4[k,])
+  M5[k,]=M5[k,]-mean(M5[k,])
+  M6[k,]=M6[k,]-mean(M6[k,])
+  M7[k,]=M7[k,]-mean(M7[k,])
+  M8[k,]=M8[k,]-mean(M8[k,])
+  M9[k,]=M9[k,]-mean(M9[k,])
+}
+```
+
+
+Now the data may be saved as 
+```{r}
+save(M1,M2,M3,M4,M5,M6,M7,M8,M9,file='TMs.Rdata')
+save(T1Ys,T2Ys,T3Ys,T4Ys,T5Ys,T6Ys,T7Ys,T8Ys,T9Ys,file='TYs.Rdata')
+```
+and easily loaded in other documents
+
+load('TMs.Rdata')
