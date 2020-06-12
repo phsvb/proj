@@ -22,6 +22,8 @@ Here is how we load/save the data:
 Loading the data: Only looking at T-files for now (excluding E-files)
 Only need first 22 channels and last 6 runs
 
+load('proj/Tfiles.Rdata')
+
 ```{r}
 T1 <- readMat('data/A01T.mat')
 T1=(unlist(T1,recursive="F"))
@@ -42,6 +44,7 @@ T8=(unlist(T8,recursive="F"))
 T9 <- readMat('data/A09T.mat')
 T9=(unlist(T9,recursive="F"))
 ```
+
 or alternative 
 save(T1,T2,T3,T4,T5,T6,T7,T8,T9,file='Tfiles.Rdata')
 load('Tfiles.Rdata')
@@ -181,10 +184,12 @@ for (i in 1:6){
   T9Ys[1:48+48*(i-1),]=eval(as.name(paste0('xT9RY',i)))
 }
 ```
-
+head(M1)
 
 decision:
 we filter by subject. (could also have filtered by training/test)
+...
+Try NOT to filter:
 ```{r}
 coefs <- butter(3, c(8 / (.5 * 250), 30 / (.5 * 250)), "pass")
 for(j in 1:22){ #filtering
@@ -212,10 +217,11 @@ for(k in 1:dim(M1)[1]){ #car - all have same dimension
 }
 ```
 
+head(M1)
 
 Now the data may be saved as 
 ```{r}
-save(M1,M2,M3,M4,M5,M6,M7,M8,M9,file='TMs.Rdata')
+save(M1,M2,M3,M4,M5,M6,M7,M8,M9,file='TMsRAW.Rdata')
 save(T1Ys,T2Ys,T3Ys,T4Ys,T5Ys,T6Ys,T7Ys,T8Ys,T9Ys,file='TYs.Rdata')
 ```
 and easily loaded in other documents
